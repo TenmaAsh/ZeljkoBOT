@@ -135,7 +135,7 @@ async def coins(interaction: discord.Interaction):
 blackjack_games = {}  # {user_id: game_dict}
 
 def create_deck():
-    suits = ["♠", "♥", "♦", "♣"]
+    suits = ["♠️", "❤️", "♦️", "♣️"]
     values = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
     deck = [f"{v}{s}" for v in values for s in suits]
     random.shuffle(deck)
