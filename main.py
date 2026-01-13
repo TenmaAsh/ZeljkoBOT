@@ -47,7 +47,7 @@ async def slavkoafk(interaction: discord.Interaction):
         afk_users[interaction.user.id] = datetime.datetime.now()
 
         await interaction.response.send_message(
-            f"Slavko 🍎 {interaction.user.name} je sada AFK u kanalu {channel.name}!"
+            f"Željko 🍆 {interaction.user.name} je sada AFK u kanalu {channel.name}!"
         )
 
         # --- ORIGINALNI AFK LOOP (NETAKNUT) ---
@@ -60,7 +60,7 @@ async def slavkoafk(interaction: discord.Interaction):
         asyncio.create_task(afk_loop())
     else:
         await interaction.response.send_message(
-            "Slavko 🍎: Moraš biti u voice kanalu da koristiš ovu komandu."
+            "Željko 🍆: Moraš biti u voice kanalu da koristiš ovu komandu."
         )
 
 # /slavkoleave
@@ -74,9 +74,9 @@ async def slavkoleave(interaction: discord.Interaction):
             if vc:
                 await vc.disconnect()
 
-        await interaction.response.send_message("Slavko 🍎 Izašao iz AFK kanala!")
+        await interaction.response.send_message("Željko 🍆 Izašao iz AFK kanala!")
     else:
-        await interaction.response.send_message("Slavko 🍎: Nisi u AFK modu.")
+        await interaction.response.send_message("Željko 🍆: Nisi u AFK modu.")
 
 # /slavkotime
 @bot.tree.command(name="slavkotime", description="Vreme provedeno u AFK")
@@ -84,10 +84,10 @@ async def slavkotime(interaction: discord.Interaction):
     if interaction.user.id in afk_users:
         delta = datetime.datetime.now() - afk_users[interaction.user.id]
         await interaction.response.send_message(
-            f"Slavko 🍎 je AFK već {str(delta).split('.')[0]}!"
+            f"Željko 🍆 je AFK već {str(delta).split('.')[0]}!"
         )
     else:
-        await interaction.response.send_message("Slavko 🍎 Nije u AFK modu.")
+        await interaction.response.send_message("Željko🍆 Nije u AFK modu.")
 
 # ----------------- START -----------------
 
