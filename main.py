@@ -23,7 +23,7 @@ users_data = {}  # {user_id: {"coins": int, "voice_minutes": int, "played_blackj
 def get_user(user):
     if user.id not in users_data:
         users_data[user.id] = {
-            "coins": 1000,
+            "coins": 100000,
             "voice_minutes": 0,
             "played_blackjack": False,
             "last_voice_join": None
@@ -42,7 +42,7 @@ async def keep_vc_alive():
 # --- on_ready ---
 @bot.event
 async def on_ready():
-    print(f"{bot.user} je online (Slavko AFK)!")
+    print(f"{bot.user} je online (Zeljko AFK)!")
     keep_alive()
     keep_vc_alive.start()
     try:
@@ -197,13 +197,13 @@ async def blackjack(interaction: discord.Interaction, bet: int):
     )
 
 # ----------------- AFK komande (netaknute) -----------------
-@bot.tree.command(name="slavkoafk", description="Slavko ulazi u kanal i ide AFK")
-async def slavkoafk(interaction: discord.Interaction):
+@bot.tree.command(name="zeljkoafk", description="Zeljko ulazi u kanal i ide AFK")
+async def zeljkoafk(interaction: discord.Interaction):
     if interaction.user.voice and interaction.user.voice.channel:
         channel = interaction.user.voice.channel
         vc = await channel.connect()
         afk_users[interaction.user.id] = datetime.datetime.now()
-        await interaction.response.send_message(f"Slavko 🍎 {interaction.user.name} je sada AFK u kanalu {channel.name}!")
+        await interaction.response.send_message(f"Zeljko 🎲 {interaction.user.name} je sada AFK u kanalu {channel.name}!")
 
         async def afk_loop():
             while interaction.user.id in afk_users:
@@ -213,25 +213,25 @@ async def slavkoafk(interaction: discord.Interaction):
 
         asyncio.create_task(afk_loop())
     else:
-        await interaction.response.send_message("Slavko 🍎: Moraš biti u voice kanalu da koristiš ovu komandu.")
+        await interaction.response.send_message("Zeljko 🎲: Moraš biti u voice kanalu da koristiš ovu komandu.")
 
-@bot.tree.command(name="slavkoleave", description="Izađi iz AFK kanala")
-async def slavkoleave(interaction: discord.Interaction):
+@bot.tree.command(name="zeljkoleave", description="Izađi iz AFK kanala")
+async def zeljkoleave(interaction: discord.Interaction):
     if interaction.user.id in afk_users:
         afk_users.pop(interaction.user.id)
         vc = discord.utils.get(bot.voice_clients, guild=interaction.guild)
         if vc: await vc.disconnect()
-        await interaction.response.send_message("Slavko 🍎 Izašao iz AFK kanala!")
+        await interaction.response.send_message("Zeljko 🎲 Izašao iz AFK kanala!")
     else:
-        await interaction.response.send_message("Slavko 🍎: Nisi u AFK modu.")
+        await interaction.response.send_message("Zeljko 🎲: Nisi u AFK modu.")
 
-@bot.tree.command(name="slavkotime", description="Vreme provedeno u AFK")
-async def slavkotime(interaction: discord.Interaction):
+@bot.tree.command(name="zeljkotime", description="Vreme provedeno u AFK")
+async def zeljkotimetime(interaction: discord.Interaction):
     if interaction.user.id in afk_users:
         delta = datetime.datetime.now() - afk_users[interaction.user.id]
-        await interaction.response.send_message(f"Slavko 🍎 je AFK već {str(delta).split('.')[0]}!")
+        await interaction.response.send_message(f"Zeljko 🎲 je AFK već {str(delta).split('.')[0]}!")
     else:
-        await interaction.response.send_message("Slavko 🍎 Nije u AFK modu.")
+        await interaction.response.send_message("Zeljko 🎲 Nije u AFK modu.")
 
 # ----------------- Coins komanda -----------------
 @bot.tree.command(name="coins", description="Koliko coinsa imaš")
