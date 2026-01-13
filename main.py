@@ -5,10 +5,8 @@ import datetime
 import asyncio
 import os
 import random
-import certifi
-from pymongo import MongoClient
-from webserver import keep_alive  # pretpostavljam da ovo već imaš
 import sys
+
 print("Python verzija:", sys.version)
 
 # --- Intents i bot ---
@@ -19,37 +17,19 @@ bot = commands.Bot(command_prefix='/', intents=intents)
 afk_users = {}  # {user_id: join_time}
 SILENT_FILE = "silent.mp3"
 
-# --- MongoDB ---
-MONGO_URI = os.getenv("MONGO_URI")
-if not MONGO_URI:
-    print("⚠️ MONGO_URI nije postavljen!")
-    exit(1)
+# --- Users in-memory storage ---
+users_data = {}  # {user_id: {"coins": int, "voice_minutes": int, "played_blackjack": bool, "last_voice_join": datetime}}
 
-# Universal SSL fix za Render Python 3.13
-mongo = MongoClient(
-    MONGO_URI,
-    tls=True,
-    tlsCAFile=certifi.where(),
-    tlsAllowInvalidCertificates=False,
-    serverSelectionTimeoutMS=30000  # 30s timeout
-)
-db = mongo["discordbot"]
-users = db["users"]
-
-# --- Helper: kreiranje korisnika u bazi ---
+# --- Helper: kreiranje/uzimanje korisnika ---
 def get_user(user):
-    u = users.find_one({"user_id": user.id})
-    if not u:
-        users.insert_one({
-            "user_id": user.id,
+    if user.id not in users_data:
+        users_data[user.id] = {
             "coins": 1000,
             "voice_minutes": 0,
             "played_blackjack": False,
-            "last_voice_reward": datetime.datetime.utcnow(),
-            "joined_at": datetime.datetime.utcnow()
-        })
-        return get_user(user)
-    return u
+            "last_voice_join": None
+        }
+    return users_data[user.id]
 
 # --- Task za održavanje VC alive ---
 @tasks.loop(seconds=10)
@@ -64,7 +44,6 @@ async def keep_vc_alive():
 @bot.event
 async def on_ready():
     print(f"{bot.user} je online (Zeljko AFK)!")
-    keep_alive()
     keep_vc_alive.start()
 
     try:
@@ -104,12 +83,9 @@ async def zeljkoafk(interaction: discord.Interaction):
 async def zeljkoleave(interaction: discord.Interaction):
     if interaction.user.id in afk_users:
         afk_users.pop(interaction.user.id)
-
-        if interaction.user.voice and interaction.user.voice.channel:
-            vc = discord.utils.get(bot.voice_clients, guild=interaction.guild)
-            if vc:
-                await vc.disconnect()
-
+        vc = discord.utils.get(bot.voice_clients, guild=interaction.guild)
+        if vc:
+            await vc.disconnect()
         await interaction.response.send_message("Željko 🍆 Izašao iz AFK kanala!")
     else:
         await interaction.response.send_message("Željko 🍆: Nisi u AFK modu.")
@@ -130,28 +106,22 @@ async def on_voice_state_update(member, before, after):
     if member.bot:
         return
 
+    u = get_user(member)
+
     # ulazak u voice
     if not before.channel and after.channel:
-        get_user(member)
-        users.update_one(
-            {"user_id": member.id},
-            {"$set": {"last_voice_join": datetime.datetime.utcnow()}},
-            upsert=True
-        )
+        u["last_voice_join"] = datetime.datetime.utcnow()
 
     # izlazak iz voice
     if before.channel and not after.channel:
-        u = get_user(member)
         join = u.get("last_voice_join")
         if join:
             seconds = (datetime.datetime.utcnow() - join).total_seconds()
             hours = int(seconds // 3600)
             if hours > 0:
                 coins = hours * 100
-                users.update_one(
-                    {"user_id": member.id},
-                    {"$inc": {"coins": coins, "voice_minutes": int(seconds // 60)}}
-                )
+                u["coins"] += coins
+                u["voice_minutes"] += int(seconds // 60)
 
 # ----------------- Coins komanda -----------------
 @bot.tree.command(name="coins", description="Koliko coinsa imaš")
@@ -196,10 +166,8 @@ async def blackjack(interaction: discord.Interaction, bet: int):
     if interaction.user.id in blackjack_games:
         return await interaction.response.send_message("Već igraš blackjack!")
 
-    users.update_one(
-        {"user_id": interaction.user.id},
-        {"$inc":{"coins": -bet}, "$set":{"played_blackjack": True}}
-    )
+    u["coins"] -= bet
+    u["played_blackjack"] = True
 
     deck = create_deck()
     player = [deck.pop(), deck.pop()]
@@ -254,10 +222,10 @@ async def stand(interaction: discord.Interaction):
 
     if dealer_val>21 or player_val>dealer_val:
         result="🏆 Pobedio si!"
-        users.update_one({"user_id": interaction.user.id}, {"$inc":{"coins": bet*2}})
+        get_user(interaction.user)["coins"] += bet*2
     elif player_val==dealer_val:
         result="🤝 Nerešeno."
-        users.update_one({"user_id": interaction.user.id}, {"$inc":{"coins": bet}})
+        get_user(interaction.user)["coins"] += bet
     else:
         result="💀 Izgubio si."
 
@@ -271,19 +239,16 @@ async def stand(interaction: discord.Interaction):
 # ----------------- 8h random reward -----------------
 @tasks.loop(hours=8)
 async def random_reward_loop():
+    eligible = [uid for uid, u in users_data.items() if u.get("played_blackjack")]
+    if not eligible:
+        return
+    winner_id = random.choice(eligible)
+    users_data[winner_id]["coins"] += 500
     try:
-        eligible = list(users.find({"played_blackjack": True}))
-        if not eligible:
-            return
-        winner = random.choice(eligible)
-        users.update_one({"user_id": winner["user_id"]}, {"$inc":{"coins":500}})
-        try:
-            user = await bot.fetch_user(winner["user_id"])
-            await user.send("🎁 Čestitamo! Dobio si 500 coinsa iz random nagrade!")
-        except:
-            pass
-    except Exception as e:
-        print("⚠️ Random reward error:", e)
+        user = await bot.fetch_user(winner_id)
+        await user.send("🎁 Čestitamo! Dobio si 500 coinsa iz random nagrade!")
+    except:
+        pass
 
 # ----------------- START -----------------
 TOKEN = os.getenv("DISCORD_TOKEN")
