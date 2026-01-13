@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands
+from discord import app_commands, ui
 from discord.ext import commands, tasks
 import datetime
 import asyncio
@@ -132,7 +132,7 @@ async def coins(interaction: discord.Interaction):
     )
 
 # ----------------- Blackjack -----------------
-blackjack_games = {}  # {user_id: {"deck":[],"player":[],"dealer":[],"bet":int}}
+blackjack_games = {}  # {user_id: game_dict}
 
 def create_deck():
     suits = ["♠", "♥", "♦", "♣"]
@@ -151,17 +151,124 @@ def hand_value(hand):
     value = sum(card_value(c) for c in hand)
     aces = sum(1 for c in hand if c[:-1]=="A")
     while value>21 and aces:
-        value-=10
-        aces-=1
+        value -= 10
+        aces -= 1
     return value
 
+# --- Blackjack View sa dugmićima ---
+class BlackjackView(ui.View):
+    def __init__(self, user_id):
+        super().__init__(timeout=120)
+        self.user_id = user_id
+        self.split_active = False
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.user_id
+
+    async def update_buttons(self, game):
+        self.clear_items()
+        self.add_item(ui.Button(label="Hit", style=discord.ButtonStyle.green, custom_id="hit"))
+        self.add_item(ui.Button(label="Stand", style=discord.ButtonStyle.red, custom_id="stand"))
+
+        if len(game["player"]) == 2 and not self.split_active:
+            self.add_item(ui.Button(label="Double", style=discord.ButtonStyle.blurple, custom_id="double"))
+            if card_value(game["player"][0]) == card_value(game["player"][1]):
+                self.add_item(ui.Button(label="Split", style=discord.ButtonStyle.gray, custom_id="split"))
+
+    async def stand_game(self, interaction):
+        game = blackjack_games[self.user_id]
+
+        # Pravilo za dilera: ako je 16 ili manje, povlači kartu; 17 ili više stoji
+        while hand_value(game["dealer"]) < 17:
+            game["dealer"].append(game["deck"].pop())
+
+        player_val = hand_value(game["player"])
+        dealer_val = hand_value(game["dealer"])
+        bet = game["bet"]
+        blackjack_games.pop(self.user_id)
+
+        u = get_user(interaction.user)
+        if dealer_val > 21 or player_val > dealer_val:
+            result = "🏆 Pobedio si!"
+            u["coins"] += bet * 2
+        elif player_val == dealer_val:
+            result = "🤝 Nerešeno."
+            u["coins"] += bet
+        else:
+            result = "💀 Izgubio si."
+
+        await interaction.response.edit_message(
+            content=f"🃏 **Rezultat**\n"
+                    f"Tvoje: {', '.join(game['player'])} ({player_val})\n"
+                    f"Dealer: {', '.join(game['dealer'])} ({dealer_val})\n\n"
+                    f"{result}",
+            view=None
+        )
+
+    @ui.button(label="Hit", style=discord.ButtonStyle.green)
+    async def hit_button(self, interaction: discord.Interaction, button: ui.Button):
+        game = blackjack_games[self.user_id]
+        game["player"].append(game["deck"].pop())
+        value = hand_value(game["player"])
+
+        if value > 21:
+            blackjack_games.pop(self.user_id)
+            await interaction.response.edit_message(
+                content=f"💥 Bust!\nTvoje karte: {', '.join(game['player'])} ({value})",
+                view=None
+            )
+        elif value == 21:
+            await self.stand_game(interaction)
+        else:
+            await self.update_buttons(game)
+            await interaction.response.edit_message(
+                content=f"Tvoje karte: {', '.join(game['player'])} ({value})\nDealer: {game['dealer'][0]}, ❓",
+                view=self
+            )
+
+    @ui.button(label="Stand", style=discord.ButtonStyle.red)
+    async def stand_button(self, interaction: discord.Interaction, button: ui.Button):
+        await self.stand_game(interaction)
+
+    @ui.button(label="Double", style=discord.ButtonStyle.blurple)
+    async def double_button(self, interaction: discord.Interaction, button: ui.Button):
+        game = blackjack_games[self.user_id]
+        u = get_user(interaction.user)
+        bet = game["bet"]
+
+        if u["coins"] < bet:
+            return await interaction.response.send_message("Nema dovoljno coinsa za Double!", ephemeral=True)
+
+        u["coins"] -= bet
+        game["bet"] *= 2
+        game["player"].append(game["deck"].pop())
+        await self.stand_game(interaction)
+
+    @ui.button(label="Split", style=discord.ButtonStyle.gray)
+    async def split_button(self, interaction: discord.Interaction, button: ui.Button):
+        game = blackjack_games[self.user_id]
+        self.split_active = True
+
+        first_card = game["player"][0]
+        second_card = game["player"][1]
+        game["player"] = [first_card, game["deck"].pop()]
+        game["split_hand"] = [second_card, game["deck"].pop()]
+        game["current_hand"] = "player"
+
+        await interaction.response.edit_message(
+            content=f"Ruka podeljena!\nPrva ruka: {', '.join(game['player'])}\nDruga ruka: {', '.join(game['split_hand'])}\nIgraj prvu ruku.",
+            view=self
+        )
+
+
+# --- Pokretanje igre ---
 @bot.tree.command(name="blackjack", description="Započni blackjack igru")
 @app_commands.describe(bet="Koliko želiš da uložiš")
 async def blackjack(interaction: discord.Interaction, bet: int):
     u = get_user(interaction.user)
-    if bet <=0:
+    if bet <= 0:
         return await interaction.response.send_message("Moraš uložiti nešto.")
-    if u["coins"]<bet:
+    if u["coins"] < bet:
         return await interaction.response.send_message("Nemaš dovoljno coinsa.")
     if interaction.user.id in blackjack_games:
         return await interaction.response.send_message("Već igraš blackjack!")
@@ -180,60 +287,14 @@ async def blackjack(interaction: discord.Interaction, bet: int):
         "bet": bet
     }
 
+    view = BlackjackView(interaction.user.id)
+    await view.update_buttons(blackjack_games[interaction.user.id])
+
     await interaction.response.send_message(
         f"🃏 **Blackjack**\n"
         f"Tvoje karte: {', '.join(player)} ({hand_value(player)})\n"
-        f"Dealer: {dealer[0]}, ❓\n\n"
-        f"Koristi /hit ili /stand"
-    )
-
-@bot.tree.command(name="hit", description="Uzmi novu kartu")
-async def hit(interaction: discord.Interaction):
-    if interaction.user.id not in blackjack_games:
-        return await interaction.response.send_message("Nisi u blackjack igri.")
-    game = blackjack_games[interaction.user.id]
-    game["player"].append(game["deck"].pop())
-    value = hand_value(game["player"])
-
-    if value>21:
-        blackjack_games.pop(interaction.user.id)
-        await interaction.response.send_message(
-            f"💥 Bust!\nTvoje karte: {', '.join(game['player'])} ({value})"
-        )
-    else:
-        await interaction.response.send_message(
-            f"Tvoje karte: {', '.join(game['player'])} ({value})\n"
-            f"Dealer: {game['dealer'][0]}, ❓"
-        )
-
-@bot.tree.command(name="stand", description="Stani i završi rundu")
-async def stand(interaction: discord.Interaction):
-    if interaction.user.id not in blackjack_games:
-        return await interaction.response.send_message("Nisi u blackjack igri.")
-    game = blackjack_games[interaction.user.id]
-
-    while hand_value(game["dealer"])<17:
-        game["dealer"].append(game["deck"].pop())
-
-    player_val = hand_value(game["player"])
-    dealer_val = hand_value(game["dealer"])
-    bet = game["bet"]
-    blackjack_games.pop(interaction.user.id)
-
-    if dealer_val>21 or player_val>dealer_val:
-        result="🏆 Pobedio si!"
-        get_user(interaction.user)["coins"] += bet*2
-    elif player_val==dealer_val:
-        result="🤝 Nerešeno."
-        get_user(interaction.user)["coins"] += bet
-    else:
-        result="💀 Izgubio si."
-
-    await interaction.response.send_message(
-        f"🃏 **Rezultat**\n"
-        f"Tvoje: {', '.join(game['player'])} ({player_val})\n"
-        f"Dealer: {', '.join(game['dealer'])} ({dealer_val})\n\n"
-        f"{result}"
+        f"Dealer: {dealer[0]}, ❓",
+        view=view
     )
 
 # ----------------- 8h random reward -----------------
@@ -249,6 +310,8 @@ async def random_reward_loop():
         await user.send("🎁 Čestitamo! Dobio si 500 coinsa iz random nagrade!")
     except:
         pass
+
+
 
 # ----------------- START -----------------
 TOKEN = os.getenv("DISCORD_TOKEN")
