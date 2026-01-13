@@ -20,6 +20,7 @@ afk_users = {}  # {user_id: join_time}
 SILENT_FILE = "silent.mp3"
 
 # --- MongoDB ---
+MONGO_URI = os.getenv("MONGO_URI")
 mongo = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = mongo["discordbot"]
 users = db["users"]
@@ -275,5 +276,5 @@ async def random_reward_loop():
         pass
 
 # ----------------- START -----------------
-TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv("_TOKDISCORDEN")
 bot.run(TOKEN)
