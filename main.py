@@ -276,5 +276,5 @@ async def random_reward_loop():
         pass
 
 # ----------------- START -----------------
-TOKEN = os.getenv("_TOKDISCORDEN")
+TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)
