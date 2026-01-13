@@ -39,7 +39,7 @@ async def on_ready():
 # ----------------- SLASH KOMANDE -----------------
 
 # /zeljkoafk
-@bot.tree.command(name="zeljkooafk", description="Zeljko ulazi u kanal i ide AFK")
+@bot.tree.command(name="zeljkoafk", description="Zeljko ulazi u kanal i ide AFK")
 async def zeljkoafk(interaction: discord.Interaction):
     if interaction.user.voice and interaction.user.voice.channel:
         channel = interaction.user.voice.channel
