@@ -7,9 +7,9 @@ import os
 import random
 import certifi
 from pymongo import MongoClient
-from webserver import keep_alive  # pretpostavljam da ovo imaš
+from webserver import keep_alive  # pretpostavljam da ovo već imaš
 import sys
-print(sys.version)
+print("Python verzija:", sys.version)
 
 # --- Intents i bot ---
 intents = discord.Intents.all()
@@ -21,7 +21,18 @@ SILENT_FILE = "silent.mp3"
 
 # --- MongoDB ---
 MONGO_URI = os.getenv("MONGO_URI")
-mongo = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
+if not MONGO_URI:
+    print("⚠️ MONGO_URI nije postavljen!")
+    exit(1)
+
+# Universal SSL fix za Render Python 3.13
+mongo = MongoClient(
+    MONGO_URI,
+    tls=True,
+    tlsCAFile=certifi.where(),
+    tlsAllowInvalidCertificates=False,
+    serverSelectionTimeoutMS=30000  # 30s timeout
+)
 db = mongo["discordbot"]
 users = db["users"]
 
@@ -111,7 +122,7 @@ async def zeljkotime(interaction: discord.Interaction):
             f"Željko 🍆 je AFK već {str(delta).split('.')[0]}!"
         )
     else:
-        await interaction.response.send_message("Željko🍆 Nije u AFK modu.")
+        await interaction.response.send_message("Željko 🍆 Nije u AFK modu.")
 
 # ----------------- Voice coins 100/sat -----------------
 @bot.event
@@ -139,9 +150,7 @@ async def on_voice_state_update(member, before, after):
                 coins = hours * 100
                 users.update_one(
                     {"user_id": member.id},
-                    {
-                        "$inc": {"coins": coins, "voice_minutes": int(seconds // 60)}
-                    }
+                    {"$inc": {"coins": coins, "voice_minutes": int(seconds // 60)}}
                 )
 
 # ----------------- Coins komanda -----------------
@@ -187,7 +196,6 @@ async def blackjack(interaction: discord.Interaction, bet: int):
     if interaction.user.id in blackjack_games:
         return await interaction.response.send_message("Već igraš blackjack!")
 
-    # oduzmi bet i oznaci da je igrao
     users.update_one(
         {"user_id": interaction.user.id},
         {"$inc":{"coins": -bet}, "$set":{"played_blackjack": True}}
@@ -263,18 +271,24 @@ async def stand(interaction: discord.Interaction):
 # ----------------- 8h random reward -----------------
 @tasks.loop(hours=8)
 async def random_reward_loop():
-    # uzmi sve koji su igrali blackjack
-    eligible = list(users.find({"played_blackjack": True}))
-    if not eligible:
-        return
-    winner = random.choice(eligible)
-    users.update_one({"user_id": winner["user_id"]}, {"$inc":{"coins":500}})
     try:
-        user = await bot.fetch_user(winner["user_id"])
-        await user.send("🎁 Čestitamo! Dobio si 500 coinsa iz random nagrade!")
-    except:
-        pass
+        eligible = list(users.find({"played_blackjack": True}))
+        if not eligible:
+            return
+        winner = random.choice(eligible)
+        users.update_one({"user_id": winner["user_id"]}, {"$inc":{"coins":500}})
+        try:
+            user = await bot.fetch_user(winner["user_id"])
+            await user.send("🎁 Čestitamo! Dobio si 500 coinsa iz random nagrade!")
+        except:
+            pass
+    except Exception as e:
+        print("⚠️ Random reward error:", e)
 
 # ----------------- START -----------------
 TOKEN = os.getenv("DISCORD_TOKEN")
+if not TOKEN:
+    print("⚠️ DISCORD_TOKEN nije postavljen!")
+    exit(1)
+
 bot.run(TOKEN)
