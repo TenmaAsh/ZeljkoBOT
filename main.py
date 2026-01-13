@@ -26,7 +26,7 @@ async def keep_vc_alive():
 # --- on_ready ---
 @bot.event
 async def on_ready():
-    print(f"{bot.user} je online (Slavko AFK)!")
+    print(f"{bot.user} je online (Zeljko AFK)!")
     keep_alive()
     keep_vc_alive.start()
 
@@ -38,9 +38,9 @@ async def on_ready():
 
 # ----------------- SLASH KOMANDE -----------------
 
-# /slavkoafk
-@bot.tree.command(name="slavkoafk", description="Slavko ulazi u kanal i ide AFK")
-async def slavkoafk(interaction: discord.Interaction):
+# /zeljkoafk
+@bot.tree.command(name="zeljkooafk", description="Zeljko ulazi u kanal i ide AFK")
+async def zeljkoafk(interaction: discord.Interaction):
     if interaction.user.voice and interaction.user.voice.channel:
         channel = interaction.user.voice.channel
         vc = await channel.connect()
@@ -63,9 +63,9 @@ async def slavkoafk(interaction: discord.Interaction):
             "Željko 🍆: Moraš biti u voice kanalu da koristiš ovu komandu."
         )
 
-# /slavkoleave
-@bot.tree.command(name="slavkoleave", description="Izađi iz AFK kanala")
-async def slavkoleave(interaction: discord.Interaction):
+# /zeljkoleave
+@bot.tree.command(name="zeljkoleave", description="Izađi iz AFK kanala")
+async def zeljkoleave(interaction: discord.Interaction):
     if interaction.user.id in afk_users:
         afk_users.pop(interaction.user.id)
 
@@ -78,9 +78,9 @@ async def slavkoleave(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("Željko 🍆: Nisi u AFK modu.")
 
-# /slavkotime
-@bot.tree.command(name="slavkotime", description="Vreme provedeno u AFK")
-async def slavkotime(interaction: discord.Interaction):
+# /zeljkotime
+@bot.tree.command(name="zeljkotime", description="Vreme provedeno u AFK")
+async def zeljkotime(interaction: discord.Interaction):
     if interaction.user.id in afk_users:
         delta = datetime.datetime.now() - afk_users[interaction.user.id]
         await interaction.response.send_message(
