@@ -20,8 +20,7 @@ afk_users = {}  # {user_id: join_time}
 SILENT_FILE = "silent.mp3"
 
 # --- MongoDB ---
-MONGO_URI = os.getenv("MONGO_URI")
-mongo = MongoClient(MONGO_URI)
+mongo = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = mongo["discordbot"]
 users = db["users"]
 
