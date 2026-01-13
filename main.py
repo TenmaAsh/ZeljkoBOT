@@ -5,8 +5,11 @@ import datetime
 import asyncio
 import os
 import random
+import certifi
 from pymongo import MongoClient
 from webserver import keep_alive  # pretpostavljam da ovo imaš
+import sys
+print(sys.version)
 
 # --- Intents i bot ---
 intents = discord.Intents.all()
